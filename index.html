@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GreenLens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: top bar + tab strip, one working view below; summary first, detail after. */
+:root{
+  --bg:#eef3f1; --surface:#ffffff; --ink:#10231f; --muted:#5a6d68; --line:#d5dfdb;
+  --accent:#0f766e; --accent-ink:#ffffff; --band:rgba(15,118,110,.08);
+  --good:#2e7d32; --warn:#a96a00; --crit:#c0392b;
+  --good-bg:#e4f2e5; --warn-bg:#faefd9; --crit-bg:#f8e3e0;
+  --display:'Sora',system-ui,sans-serif; --body:'IBM Plex Sans',system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1412; --surface:#12201d; --ink:#e5efec; --muted:#93a8a2; --line:#233631;
+  --accent:#3fd0b4; --accent-ink:#06201a; --band:rgba(63,208,180,.09);
+  --good:#7fd685; --warn:#f0b24a; --crit:#ff8a7a;
+  --good-bg:#14301a; --warn-bg:#33280f; --crit-bg:#3a1b17; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0b1412; --surface:#12201d; --ink:#e5efec; --muted:#93a8a2; --line:#233631;
+  --accent:#3fd0b4; --accent-ink:#06201a; --band:rgba(63,208,180,.09);
+  --good:#7fd685; --warn:#f0b24a; --crit:#ff8a7a;
+  --good-bg:#14301a; --warn-bg:#33280f; --crit-bg:#3a1b17; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+header.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand h1{font-size:22px}
+.brand small{display:block;color:var(--muted);font-size:12.5px;margin-top:-2px}
+.badge{font-size:12px;padding:3px 10px;border-radius:99px;background:var(--warn-bg);color:var(--warn);font-weight:600}
+nav.tabs{display:flex;flex-wrap:wrap;gap:4px;padding-bottom:0}
+nav.tabs a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:500;border-bottom:3px solid transparent;white-space:nowrap}
+nav.tabs a[aria-current="page"]{color:var(--ink);border-color:var(--accent)}
+nav.tabs a:hover{color:var(--ink)}
+details.settings{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:16px 0 0}
+details.settings summary{cursor:pointer;padding:10px 14px;font-weight:600}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding:4px 14px 14px}
+.sgrid label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+.sgrid input{padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg)}
+main{padding:18px 0 40px}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+.headline{background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:18px 20px;display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;justify-content:space-between}
+.headline .big{font:700 30px/1.1 var(--display)}
+.headline p{margin:0;max-width:46ch}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile .k{font-size:12.5px;color:var(--muted)}
+.tile .v{font:600 22px/1.25 var(--display)}
+.tile .s{font-size:12px;color:var(--muted)}
+.tile.crit .v{color:var(--crit)} .tile.good .v{color:var(--good)} .tile.warn .v{color:var(--warn)}
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+section.card h2{font-size:17px;margin-bottom:4px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 4px}
+.chip{border:1px solid var(--line);background:var(--surface);padding:6px 12px;border-radius:99px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--accent)}
+.chartbox{overflow-x:auto;margin-top:8px}
+.chartbox svg{min-width:560px;width:100%;height:auto;display:block}
+.ax{stroke:var(--line)} .tx{fill:var(--muted);font:11px var(--body)}
+.ln{fill:none;stroke:var(--accent);stroke-width:2.4} .ln2{fill:none;stroke:var(--muted);stroke-width:1.8;stroke-dasharray:4 4}
+.thr{stroke:var(--crit);stroke-dasharray:6 4;stroke-width:1.6} .thr-t{fill:var(--crit);font:600 11px var(--body)}
+.band{fill:var(--band)} .brect{fill:var(--accent)} .brect.flag{fill:var(--crit)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:4px}
+.legend i{display:inline-block;width:18px;height:0;border-top:3px solid var(--accent);vertical-align:middle;margin-right:5px}
+.legend i.d{border-top:3px dashed var(--muted)} .legend i.r{border-top:3px dashed var(--crit)}
+.act{border:1px solid var(--line);border-left:5px solid var(--muted);border-radius:10px;padding:12px 14px;margin:10px 0;background:var(--surface)}
+.act.high{border-left-color:var(--crit)} .act.medium{border-left-color:var(--warn)} .act.ok{border-left-color:var(--good)}
+.act-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.act h3{font-size:15.5px;margin:4px 0}
+.act p{margin:3px 0;font-size:14px}
+.act-f{display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--muted)}
+.act-f .save{font-weight:600;color:var(--good)}
+.pill{padding:1px 9px;border-radius:99px;font-weight:600;font-size:11.5px}
+.pill.high{background:var(--crit-bg);color:var(--crit)} .pill.medium{background:var(--warn-bg);color:var(--warn)} .pill.ok{background:var(--good-bg);color:var(--good)}
+button.link{background:none;border:0;color:var(--accent);text-decoration:underline;cursor:pointer;padding:10px 6px;font:inherit}
+a.link{color:var(--accent);cursor:pointer;text-decoration:underline;background:none;border:0;padding:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.sliders label{display:block;margin:12px 0}
+.sliders .row{display:flex;justify-content:space-between;font-weight:500}
+.sliders output{font-weight:600;color:var(--accent)}
+.sliders input[type=range]{width:100%;accent-color:var(--accent)}
+.sliders .chk{display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--line)}
+th{font-size:12px;color:var(--muted);font-weight:600}
+td.n,th.n{text-align:right}
+.tblwrap{overflow-x:auto}
+.mini{display:inline-block;height:8px;border-radius:4px;background:var(--accent);vertical-align:middle;margin-left:6px}
+.rank{font:700 18px var(--display);color:var(--accent)}
+pre.rep{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;font:12.5px/1.55 var(--body);max-height:280px;overflow:auto}
+.msg{background:var(--warn-bg);color:var(--warn);padding:8px 12px;border-radius:8px;margin:8px 0;font-size:13.5px}
+.up{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+.srcchk{width:20px;height:20px;accent-color:var(--accent);cursor:pointer}
+tr.off td{color:var(--muted)}
+.xp{background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:14px 16px;margin:0 0 14px}
+.xp textarea{width:100%;height:140px;font:12px/1.5 ui-monospace,Menlo,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;resize:vertical}
+.xp .row,.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
+label.btn{display:inline-block}
+.pill.na{background:var(--line);color:var(--muted)}
+.targets{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0}
+.tg{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface)}
+.tg .k{font-size:12.5px;color:var(--muted)} .tg .v{font:600 20px/1.3 var(--display)} .tg .cut{color:var(--good);font-weight:600}
+.bar2{display:grid;grid-template-columns:62px 1fr;gap:4px 8px;align-items:center;font-size:12px;color:var(--muted);margin-top:8px}
+.bar2 .b{height:10px;border-radius:5px;background:var(--muted);opacity:.45}.bar2 .b.t{background:var(--accent);opacity:1}
+.pm{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0;background:var(--surface)}
+.pm.na{opacity:.7}
+.pm-h{display:flex;gap:10px;align-items:flex-start}
+.pm-h input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+.pm h3{font-size:15.5px;margin:0}
+.pm p{margin:4px 0;font-size:14px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13.5px;margin-top:6px}
+.stats b{font-weight:600}
+.kpi{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:13.5px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+footer{font-size:12.5px;color:var(--muted);padding:6px 0 30px}
+footer ul{margin:6px 0 0;padding-left:18px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <div class="brand">
+        <svg width="38" height="38" viewBox="0 0 40 40" aria-hidden="true"><circle cx="18" cy="18" r="12" fill="none" stroke="currentColor" stroke-width="3" style="color:var(--accent)"/><path d="M12 20c0-5 4-8 9-8 0 5-3 9-9 8z" fill="currentColor" style="color:var(--accent)"/><path d="M27 27l9 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" style="color:var(--accent)"/></svg>
+        <div><h1>GreenLens</h1><small id="campusLine">Smart campus resource dashboard</small></div>
+      </div>
+      <span class="badge">Sample data: 14 to 27 Oct 2026</span>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+  </div>
+</header>
+<div class="wrap">
+  <details class="settings">
+    <summary>Campus settings (all editable assumptions)</summary>
+    <div class="sgrid" id="settings"></div>
+  </details>
+  <main id="view" aria-live="polite"></main>
+  <footer>
+    <strong>Sources and assumptions</strong>
+    <ul>
+      <li>Grid emission factor 0.675 kg CO&#8322;/kWh (CEA CO&#8322; Baseline Database v22.0, FY 2025-26). Composting credit 0.15 kg CO&#8322;e per kg food waste (2026 Indian decentralised-site LCA).</li>
+      <li>AC saving 6% per &#176;C of set-point (BEE). BLDC fan 75 W to 32 W (manufacturer figures). Solar 1,500 kWh per kWp per year. Water norm 135 L per hostel resident per day (IS 1172:1993 / NBC).</li>
+      <li>Tariffs, equipment prices and food cost are editable assumptions, not quotes. Replace them with your own bill and local quotes. Data shown is simulated with injected faults until you upload your own.</li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s);
+const fmt=(n,d=0)=>Number(n).toLocaleString('en-IN',{maximumFractionDigits:d,minimumFractionDigits:d});
+const inr=n=>n==null?'n/a':(Math.abs(n)>=1e5?'₹'+fmt(n/1e5,1)+' lakh':'₹'+fmt(Math.round(n)));
+const mean=a=>a.reduce((x,y)=>x+y,0)/(a.length||1);
+const median=a=>{const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+const sum=a=>a.reduce((x,y)=>x+y,0);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const HR=3600e3, DAY=864e5;
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dlabel=t=>{const d=new Date(t);return d.getUTCDate()+' '+MON[d.getUTCMonth()]};
+const wk=p=>p.dow>=1&&p.dow<=5;
+
+/* ---------- campus definition and sample data ---------- */
+const MET=[
+ {id:'A',name:'Academic Block A',type:'academic',peak:140,night:70},
+ {id:'L',name:'Central Library',type:'academic',peak:55,night:12},
+ {id:'C',name:'Hostel C',type:'hostel',avg:36,res:320},
+ {id:'D',name:'Hostel D',type:'hostel',avg:24,res:280},
+ {id:'E',name:'Hostel E',type:'hostel',avg:30,res:200}];
+const WAT=[
+ {id:'C',name:'Hostel C',res:320,lpd:100,leakFrom:6,leak:.6},
+ {id:'D',name:'Hostel D',res:280,lpd:118,over:[26,74,123,220,291]},
+ {id:'E',name:'Hostel E',res:200,lpd:158}];
+const MESS=[
+ {id:'C',name:'Hostel C mess',res:320,base:.11,spikes:{4:1.9,7:1.95,11:1.85}},
+ {id:'D',name:'Hostel D mess',res:280,base:.09,spikes:{}},
+ {id:'E',name:'Hostel E mess',res:200,base:.17,spikes:{}}];
+const START=Date.UTC(2026,9,14), DAYS=14, N=DAYS*24;
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let R=rng(2026);const noise=a=>1+(R()-.5)*2*a;
+const pt=(i,v)=>{const t=START+i*HR,d=new Date(t);return{t,h:d.getUTCHours(),dow:d.getUTCDay(),v}};
+function genEnergy(m){
+  const H=[.60,.55,.52,.50,.52,.6,.75,.8,.65,.5,.45,.45,.5,.5,.48,.5,.6,.8,.95,1,1,.95,.85,.7], mh=mean(H), out=[];
+  for(let i=0;i<N;i++){const p=pt(i,0),h=p.h;let v;
+    if(m.type==='hostel'){let f=H[h]/mh;if(!wk(p)&&h>=9&&h<=16)f*=1.1;v=m.avg*f*noise(.05)}
+    else{let occ=0;
+      if(wk(p)){occ=(h>=9&&h<=17)?1:(h===8||h===18)?.5:0; if(m.id==='L'&&h>=18&&h<=19)occ=.6}
+      else occ=m.id==='L'?((h>=10&&h<=16)?.5:0):((h>=10&&h<=14)?.05:0);
+      v=(m.night+(m.peak-m.night)*occ)*noise(.04)}
+    p.v=v;out.push(p)}
+  return out}
+function genWater(m){
+  const W=[.004,.002,.002,.002,.006,.04,.09,.11,.08,.045,.03,.03,.045,.045,.03,.025,.03,.05,.075,.085,.08,.06,.04,.02],sw=sum(W),s=[],ev=[];
+  for(let i=0;i<N;i++){const p=pt(i,0);let q=m.lpd*m.res/1000*(W[p.h]/sw)*noise(.08);
+    if(m.leakFrom!=null&&Math.floor(i/24)>=m.leakFrom)q+=m.leak*noise(.05);
+    if(m.over&&m.over.includes(i)){q+=6;ev.push({t:p.t,kL:6})}
+    p.v=q;s.push(p)}
+  return{s,ev}}
+function genWaste(m){
+  return Array.from({length:DAYS},(_,d)=>{const meals=Math.round(m.res*3*.92*noise(.03)),kpm=m.base*(m.spikes[d]||1)*noise(.06),t=START+d*DAY;
+    return{t,dow:new Date(t).getUTCDay(),meals,kpm,kg:kpm*meals}})}
+
+/* ---------- state ---------- */
+const S={
+  cfg:{campus:'Your College',tariff:8.5,wtariff:50,ef:.675,pf:.93,contract:350,food:60,fans:400,tubes:600},
+  plan:{night:true,ac:true,occ:true,bldc:true,led:true,feedback:true,solar:false,leak:true,over:true,aer:true,spike:true,portion:true,compost:true},
+  energy:{},water:{},waste:{},sel:{energy:'A',water:'C',waste:'C'},tab:'overview',msg:'',
+  wi:{sp:24,fans:120,kwp:50,night:true,leak:true,over:false,waste:false},an:null,acts:[]
+};
+const SAMPLE=JSON.parse(JSON.stringify({MET,WAT,MESS}));
+function srcRows(src){src.rows=sum(Object.values(src.data.energy).map(x=>x.length))+sum(Object.values(src.data.water).map(w=>w.s.length+w.ev.length))+sum(Object.values(src.data.waste).map(x=>x.length))}
+function newSrc(name){return{id:'s'+(S.nextSrc++),name,inc:true,assets:{energy:[],water:[],waste:[]},data:{energy:{},water:{},waste:{}}}}
+function loadSample(){
+  R=rng(2026);S.xp=null;S.nextSrc=1;
+  const src={id:'sample',name:'Sample data (built-in, 14 to 27 Oct 2026)',builtin:true,inc:true,
+    assets:{energy:SAMPLE.MET.map(x=>({...x})),water:SAMPLE.WAT.map(x=>({...x})),waste:SAMPLE.MESS.map(x=>({...x}))},data:{energy:{},water:{},waste:{}}};
+  src.assets.energy.forEach(m=>src.data.energy[m.id]=genEnergy(m));
+  src.assets.water.forEach(m=>src.data.water[m.id]=genWater(m));
+  src.assets.waste.forEach(m=>src.data.waste[m.id]=genWaste(m));
+  srcRows(src);S.sources=[src];S.sel={energy:'A',water:'C',waste:'C'};rebuild();
+}
+/* merge every included source into the live lists; a later source replaces an asset with the same id */
+function rebuild(){
+  MET.length=0;WAT.length=0;MESS.length=0;S.energy={};S.water={};S.waste={};
+  const put=(list,m)=>{const i=list.findIndex(x=>x.id===m.id);if(i>=0)list[i]={...m};else list.push({...m})};
+  S.sources.filter(x=>x.inc).forEach(src=>{
+    src.assets.energy.forEach(m=>{put(MET,m);S.energy[m.id]=src.data.energy[m.id]});
+    src.assets.water.forEach(m=>{put(WAT,m);S.water[m.id]=src.data.water[m.id]});
+    src.assets.waste.forEach(m=>{put(MESS,m);S.waste[m.id]=src.data.waste[m.id]})});
+  [['energy',MET],['water',WAT],['waste',MESS]].forEach(([k,l])=>{if(!l.some(m=>m.id===S.sel[k]))S.sel[k]=l.length?l[0].id:null});
+  S.imported=S.sources.some(x=>x.inc&&!x.builtin);
+}
+function srcSummary(src){const a=src.assets,parts=[];
+  if(a.energy.length)parts.push(a.energy.length+' electricity');if(a.water.length)parts.push(a.water.length+' water');if(a.waste.length)parts.push(a.waste.length+' mess');
+  const names=[...a.energy,...a.water,...a.waste].map(m=>m.name);
+  return(parts.join(', ')||'nothing')+': '+[...new Set(names)].slice(0,4).join(', ')+(new Set(names).size>4?' and more':'')}
+
+/* ---------- analysis ---------- */
+const NIGHT_TARGET=.2, NIGHT_FLAG=.4, LEAK_FLAG=.10, NORMAL_NIGHT=.045, HOURS_NIGHT=8;
+const CAPEX={timer:25000,leak:40000,float:15000,bldc:3000,solar:45000};
+const spanDays=s=>Math.max(1,(s[s.length-1].t-s[0].t)/DAY+1/24);
+function analyze(){
+  const c=S.cfg,an={e:{},w:{},x:{}},acts=[];
+  MET.forEach(m=>{const s=S.energy[m.id],days=spanDays(s),kwhDay=sum(s.map(p=>p.v))/days;
+    const nt=mean(s.filter(p=>p.h>=22||p.h<6).map(p=>p.v)),dyv=s.filter(p=>wk(p)&&p.h>=10&&p.h<=16).map(p=>p.v),dy=dyv.length?mean(dyv):null;
+    an.e[m.id]={kwhDay,nt,dy,ratio:dy?nt/dy:null,perRes:m.res?kwhDay/m.res:null}});
+  MET.filter(m=>m.type==='academic').forEach(m=>{const e=an.e[m.id];
+    if(e.ratio!=null&&e.ratio>NIGHT_FLAG){const kwh=(e.nt-NIGHT_TARGET*e.dy)*HOURS_NIGHT*365;
+      acts.push({key:'night',area:'Energy',tab:'energy',asset:m.name,aid:m.id,sev:e.ratio>.5?'high':'medium',
+        title:'Night load is '+fmt(e.ratio*100)+'% of teaching-hours load',
+        detail:m.name+' draws about '+fmt(e.nt)+' kW between 10 pm and 6 am, against '+fmt(e.dy)+' kW in teaching hours. Target is 20% or less.',
+        fix:'Switch off ACs, lights and PCs at closing time, add timers or occupancy sensors, and do a weekly after-hours walk-through.',
+        owner:'Estate and electrical office',kwh,inr:kwh*c.tariff,capex:CAPEX.timer})}});
+  const hs=MET.filter(m=>m.type==='hostel'),med=hs.length?median(hs.map(m=>an.e[m.id].perRes)):0;
+  hs.forEach(m=>{const e=an.e[m.id];
+    if(e.perRes>1.2*med){const kwh=(e.perRes-med)*m.res*365;
+      acts.push({key:'peer',area:'Energy',tab:'energy',asset:m.name,aid:m.id,sev:'medium',
+        title:fmt(e.perRes,1)+' kWh per resident per day, '+fmt((e.perRes/med-1)*100)+'% above the hostel median',
+        detail:m.name+' uses more electricity per resident than its peer hostels ('+fmt(med,1)+' kWh/resident/day median).',
+        fix:'Audit room fans, tube lights and geysers. Replace old fans with BLDC and tubes with LED. Publish the hostel ranking.',
+        owner:'Warden, '+m.name,kwh,inr:kwh*c.tariff,capex:null})}});
+  /* campus peak demand and power factor */
+  const len=MET.length?Math.min(...MET.map(m=>S.energy[m.id].length)):0;let peakKw=0;
+  for(let i=0;i<len;i++){peakKw=Math.max(peakKw,sum(MET.map(m=>S.energy[m.id][i].v)))}
+  const peakKva=peakKw/c.pf;/* 0 when no electricity data */an.x.peakKw=peakKw;an.x.peakKva=peakKva;an.x.demandRatio=peakKva/c.contract;
+  if(an.x.demandRatio>.9)acts.push({key:'md',area:'Energy',tab:'overview',asset:'Campus feeder',sev:'medium',
+    title:'Peak demand is '+fmt(an.x.demandRatio*100)+'% of contract demand',
+    detail:'Metered buildings peak at about '+fmt(peakKva)+' kVA against a contract of '+fmt(c.contract)+' kVA. Crossing it triggers higher demand charges.',
+    fix:'Stagger pump and AC start times, shift pumping to off-peak hours, and set a peak alert at 90%.',owner:'Estate and electrical office',inr:null});
+  if(MET.length&&c.pf<.95)acts.push({key:'pf',area:'Energy',tab:'overview',asset:'Campus incomer',sev:'medium',
+    title:'Power factor '+fmt(c.pf,2)+' is below 0.95',
+    detail:'A low power factor raises billed kVAh or triggers a penalty, depending on your DISCOM.',
+    fix:'Check and service the capacitor bank, and add automatic power-factor correction if needed. Confirm the penalty rule on your bill.',owner:'Estate and electrical office',inr:null});
+  /* water */
+  WAT.forEach(m=>{const d=S.water[m.id],s=d.s,t0=s[0].t-s[0].h*HR,nd=Math.floor((s[s.length-1].t-t0)/DAY)+1,mnf=Array(nd).fill(null),tot=Array(nd).fill(0);
+    s.forEach(p=>{const k=Math.floor((p.t-t0)/DAY);tot[k]+=p.v;if(p.h>=1&&p.h<=4)mnf[k]=mnf[k]==null?p.v:Math.min(mnf[k],p.v)});
+    const last=Math.min(7,nd),mL=mean(mnf.slice(-last).filter(x=>x!=null)),kLday=mean(tot.slice(-last)),avgFlow=kLday/24,ratio=mL/avgFlow,lpd=kLday*1000/m.res;
+    const leak=ratio>LEAK_FLAG?Math.max(0,mL-NORMAL_NIGHT*avgFlow):0,leakLpd=leak*24*1000/m.res;
+    an.w[m.id]={mnf,t0,nd,mL,kLday,avgFlow,ratio,lpd,leak,tot,events:d.ev};
+    if(leak>0){const kL=leak*8760;acts.push({key:'leak',area:'Water',tab:'water',asset:m.name,aid:m.id,sev:'high',
+      title:'Likely leak: '+fmt(leak,2)+' m³/h still flowing at night',
+      detail:'Minimum night flow (1 to 4 am) is '+fmt(mL,2)+' m³/h, which is '+fmt(ratio*100)+'% of average flow. Normal is under 10%.',
+      fix:'Walk the risers and tank room between 1 and 4 am, check float valves and flush valves, and fit a sub-meter alarm.',
+      owner:'Warden and plumbing contractor',kL,inr:kL*c.wtariff,capex:CAPEX.leak})}
+    if(d.ev.length){const kL=sum(d.ev.map(e=>e.kL))*365/(nd||1);acts.push({key:'over',area:'Water',tab:'water',asset:m.name,aid:m.id,sev:'medium',
+      title:'Tank overflowed '+d.ev.length+' times in '+nd+' days',
+      detail:'The pump kept running with the overhead tank full, mostly between 2 and 5 am.',
+      fix:'Fit a float-valve or level-sensor cut-off on the pump, and add a pump timer.',owner:'Pump operator and estate office',kL,inr:kL*c.wtariff,capex:CAPEX.float})}
+    const adj=lpd-leakLpd;
+    if(adj>1.1*135){const kL=(adj-135)*m.res*365/1000;acts.push({key:'norm',area:'Water',tab:'water',asset:m.name,aid:m.id,sev:'medium',
+      title:fmt(adj)+' L per resident per day, '+fmt((adj/135-1)*100)+'% above the 135 L norm',
+      detail:'After removing the leak, use is still above the IS 1172 hostel allowance of 135 L per head per day.',
+      fix:'Fit 4 L/min aerators on taps (about a third less tap flow), check urinal and flush valves, and show daily use on a notice board.',
+      owner:'Warden, '+m.name,kL,inr:kL*c.wtariff,capex:null})}});
+  /* waste */
+  const avgs={};
+  MESS.forEach(m=>{const a=S.waste[m.id],kp=a.map(x=>x.kpm),md=median(kp),mad=median(kp.map(x=>Math.abs(x-md))),sig=Math.max(1.4826*mad,.05*md),thr=md+2*sig;
+    const flagged=a.map((x,i)=>x.kpm>thr?i:-1).filter(i=>i>=0),excess=sum(flagged.map(i=>(a[i].kpm-md)*a[i].meals)),avg=sum(a.map(x=>x.kg))/sum(a.map(x=>x.meals));
+    avgs[m.id]=avg;an.x['w'+m.id]={md,thr,flagged,excess,avg,kgDay:mean(a.map(x=>x.kg)),mealsDay:mean(a.map(x=>x.meals))};
+    if(flagged.length){const kg=excess*365/a.length;acts.push({key:'waste',area:'Waste',tab:'waste',asset:m.name,aid:m.id,sev:'medium',
+      title:'Food waste spiked on '+flagged.length+(flagged.length===1?' day (':' days (')+flagged.map(i=>DOW[a[i].dow]).join(', ')+')',
+      detail:'Waste per meal rose to about '+fmt(Math.max(...flagged.map(i=>a[i].kpm)),2)+' kg against a usual '+fmt(md,2)+' kg.',
+      fix:'Cook to a headcount forecast on spike days, track plate waste by menu item, pass surplus to a food-rescue partner, and compost the rest.',
+      owner:'Mess manager',kg,inr:kg*c.food,capex:null})}});
+  const mAvg=Object.keys(avgs).length?median(Object.values(avgs)):Infinity;
+  MESS.forEach(m=>{const x=an.x['w'+m.id];
+    if(x.avg>1.1*mAvg){const kg=(x.avg-mAvg)*x.mealsDay*365;acts.push({key:'waste2',area:'Waste',tab:'waste',asset:m.name,aid:m.id,sev:'medium',
+      title:fmt(x.avg,2)+' kg waste per meal, '+fmt((x.avg/mAvg-1)*100)+'% above the mess median',
+      detail:'This mess wastes more food per meal on a typical day, not only on spike days.',
+      fix:'Review portion sizes and menu items with the most leftovers, and offer half-portion options.',owner:'Mess manager',kg,inr:kg*c.food,capex:null})}});
+  acts.forEach(a=>{a.co2=(a.kwh||0)*c.ef+(a.kg||0)*.15;a.id=a.key+(a.aid||'')});
+  acts.sort((a,b)=>(b.inr??-1)-(a.inr??-1));
+  an.totalKwh=sum(MET.map(m=>an.e[m.id].kwhDay))*365;
+  an.acadKwh=sum(MET.filter(m=>m.type==='academic').map(m=>an.e[m.id].kwhDay))*365;
+  an.waterKL=sum(WAT.map(m=>an.w[m.id].kLday));
+  an.wasteKg=sum(MESS.map(m=>an.x['w'+m.id].kgDay));
+  S.an=an;S.acts=acts;
+}
+
+/* ---------- charts (inline SVG) ---------- */
+function niceMax(v){const e=Math.pow(10,Math.floor(Math.log10(v||1))),f=v/e;return(f<=1?1:f<=2?2:f<=5?5:10)*e}
+function frame(W,H,L,T,iw,ih,ymax,yfmt){let g='';for(let i=0;i<=4;i++){const y=T+ih-i/4*ih;g+=`<line class="ax" x1="${L}" x2="${L+iw}" y1="${y}" y2="${y}"/><text class="tx" x="${L-6}" y="${y+4}" text-anchor="end">${yfmt(ymax*i/4)}</text>`}return g}
+function lineChart(o){
+  const W=680,H=270,L=52,T=14,B=34,iw=W-L-16,ih=H-T-B;
+  const all=o.series.flatMap(s=>s.pts.filter(p=>p!=null)).concat((o.hlines||[]).map(h=>h.y));
+  const ymax=niceMax(Math.max(...all)*1.1),X=x=>L+x/23*iw,Y=y=>T+ih-y/ymax*ih;
+  let g=(o.bands||[]).map(b=>`<rect class="band" x="${X(b[0])}" y="${T}" width="${X(b[1])-X(b[0])}" height="${ih}"/>`).join('');
+  g+=frame(W,H,L,T,iw,ih,ymax,v=>fmt(v,ymax<5?1:0));
+  for(let h=0;h<24;h+=3)g+=`<text class="tx" x="${X(h)}" y="${H-12}" text-anchor="middle">${h}:00</text>`;
+  (o.hlines||[]).forEach(h=>{g+=`<line class="thr" x1="${L}" x2="${L+iw}" y1="${Y(h.y)}" y2="${Y(h.y)}"/><text class="thr-t" x="${L+iw}" y="${Y(h.y)+15}" text-anchor="end">${h.label}</text>`});
+  o.series.forEach(s=>{let d='',pen=false;s.pts.forEach((v,i)=>{if(v==null){pen=false;return}d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1);pen=true});g+=`<path class="${s.cls}" d="${d}"/>`});
+  return`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label)}">${g}</svg>`}
+function barChart(o){
+  const W=680,H=270,L=52,T=14,B=34,iw=W-L-16,ih=H-T-B,n=o.vals.length;
+  const ymax=niceMax(Math.max(...o.vals,o.hline?o.hline.y:0)*1.15),bw=iw/n,Y=y=>T+ih-y/ymax*ih;
+  let g=frame(W,H,L,T,iw,ih,ymax,v=>fmt(v,o.dec||0));
+  o.vals.forEach((v,i)=>{const x=L+i*bw+bw*.18,h=Math.max(0,v/ymax*ih);
+    g+=`<rect class="brect${o.flag&&o.flag.has(i)?' flag':''}" x="${x}" y="${T+ih-h}" width="${bw*.64}" height="${h}" rx="2"/><text class="tx" x="${x+bw*.32}" y="${H-18}" text-anchor="middle">${o.labels[i]}</text>`});
+  g+=`<text class="tx" x="${L+iw/2}" y="${H-3}" text-anchor="middle">${o.xlab||''}</text>`;
+  if(o.hline)g+=`<line class="thr" x1="${L}" x2="${L+iw}" y1="${Y(o.hline.y)}" y2="${Y(o.hline.y)}"/>`;
+  return`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label)}">${g}</svg>`}
+function prof(s,pred){const a=Array(24).fill(0),c=Array(24).fill(0);s.forEach(p=>{if(pred(p)){a[p.h]+=p.v;c[p.h]++}});return a.map((x,i)=>c[i]?x/c[i]:null)}
+
+/* ---------- view pieces ---------- */
+const TABS=[['overview','Overview'],['energy','Energy'],['water','Water'],['waste','Waste'],['plan','Reduction plan'],['whatif','What-if simulator'],['leaderboard','Hostel leaderboard']];
+function tile(k,v,s,cls){return`<div class="tile ${cls||''}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s||''}</div></div>`}
+function actCard(a,showLink){
+  const bits=[];if(a.kwh)bits.push(fmt(a.kwh)+' kWh/yr');if(a.kL)bits.push(fmt(a.kL)+' kL/yr');if(a.kg)bits.push(fmt(a.kg)+' kg/yr');if(a.co2)bits.push(fmt(a.co2/1000,1)+' t CO₂e/yr');
+  return`<article class="act ${a.sev}"><div class="act-h"><span class="pill ${a.sev}">${a.sev==='high'?'High':'Medium'}</span><span>${a.area} &middot; ${esc(a.asset)}</span></div>
+  <h3>${esc(a.title)}</h3><p>${esc(a.detail)}</p><p><strong>Fix:</strong> ${esc(a.fix)}</p>
+  <div class="act-f"><span>Owner: ${esc(a.owner)}${a.capex?' &middot; est. cost '+inr(a.capex):''}</span><span class="save">${a.inr!=null?'Saves '+inr(a.inr)+'/yr':'Penalty risk, depends on tariff'}</span></div>
+  ${bits.length?`<div class="act-f"><span>${bits.join(' &middot; ')}</span>${showLink?`<button class="link a" data-go="${a.tab}${a.aid?':'+a.aid:''}">View data</button>`:''}</div>`:''}</article>`}
+function okCard(t){return`<article class="act ok"><div class="act-h"><span class="pill ok">Clear</span></div><h3>${t}</h3></article>`}
+function chips(kind,list){return`<div class="chips" role="group" aria-label="Choose asset">${list.map(m=>`<button class="chip" data-sel="${kind}:${m.id}" aria-pressed="${S.sel[kind]===m.id}">${esc(m.name)}</button>`).join('')}</div>`}
+function uploader(kind,hint){return`<div class="up"><label class="btn ghost" for="up-${kind}">Import CSV for this asset</label><input type="file" id="up-${kind}" accept=".csv,text/csv" data-up="${kind}" hidden><button class="btn ghost" data-export="${kind}">Export CSV</button><span>${hint}</span><button class="link a" data-reset="1">Reset to sample data only</button></div>${S.msg?`<div class="msg">${esc(S.msg)}</div>`:''}`}
+
+function vOverview(){
+  const an=S.an,acts=S.acts,tot=sum(acts.map(a=>a.inr||0)),cost=an.totalKwh*S.cfg.tariff,co2=an.totalKwh*S.cfg.ef/1000;
+  const dem=an.x.demandRatio;
+  let h=`<div class="headline"><div><div class="big">${inr(tot)} per year</div><div>identifiable savings</div></div><p>GreenLens found ${acts.length} issues across ${MET.length} metered buildings, ${WAT.length} hostel water meters and ${MESS.length} messes. Each one has an owner and a costed fix. <button class="link" data-go="plan" style="color:inherit;padding:0">See the reduction plan</button></p></div>`;
+  h+=`<div class="tiles">${tile('Electricity (est. yearly)',fmt(an.totalKwh/1000)+' MWh',inr(cost)+' energy charges')}${tile('Carbon from electricity',fmt(co2,0)+' t CO₂','at '+S.cfg.ef+' kg/kWh')}${tile('Hostel water use',fmt(an.waterKL,0)+' kL/day',fmt(an.waterKL*1000/(sum(WAT.map(m=>m.res))||1))+' L per resident')}${tile('Mess food waste',fmt(an.wasteKg,0)+' kg/day','across '+MESS.length+' messes')}${tile('Peak demand vs contract',fmt(dem*100)+'%',fmt(an.x.peakKva)+' of '+S.cfg.contract+' kVA',dem>.9?'crit':dem>.75?'warn':'good')}${tile('Power factor',fmt(S.cfg.pf,2),S.cfg.pf<.95?'below 0.95 target':'meets target',S.cfg.pf<.95?'warn':'good')}</div>`;
+  h+=`<section class="card"><h2>Data sources</h2><p class="note">Tick a file to include it in the analysis, untick to exclude it. Every tab recalculates. If two included files have the same asset id, the one lower in the list wins.</p>
+  <div class="tblwrap"><table><thead><tr><th>Include</th><th>File</th><th>Contents</th><th class="n">Rows</th><th class="n">Actions</th></tr></thead><tbody>
+  ${S.sources.map(x=>`<tr${x.inc?'':' class="off"'}><td><input type="checkbox" class="srcchk" id="src-${x.id}" data-src="${x.id}" ${x.inc?'checked':''}></td><td><label for="src-${x.id}">${esc(x.name)}</label>${x.inc?'':' <span class="pill medium">Excluded</span>'}</td><td>${esc(srcSummary(x))}</td><td class="n">${fmt(x.rows)}</td><td class="n" style="white-space:nowrap"><button class="link a" data-xsrc="${x.id}">Export</button>${x.builtin?'':`<button class="link a" data-rm="${x.id}">Remove</button>`}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="tools"><label class="btn" for="up-all">Import campus CSV</label><input type="file" id="up-all" accept=".csv,text/csv" data-up="all" hidden><button class="btn ghost" data-export="all">Export included data</button><button class="btn ghost" data-export="actions">Export action list</button><button class="link a" data-reset="1">Reset to sample data only</button></div>
+  <p class="note">Campus CSV columns: kind, asset, datetime, value, meals, name, type, res. Export any source to get a ready template.</p>${S.msg?`<div class="msg">${esc(S.msg)}</div>`:''}</section>`;
+  h+=`<section class="card"><h2>Action list, ranked by yearly rupee saving</h2><p class="note">Savings assume the pattern in the data continues for a full year.</p>${acts.map(a=>actCard(a,true)).join('')}</section>`;
+  h+=`<section class="card"><h2>Weekly report for managers</h2><p class="note">One page per owner, ready to paste into WhatsApp or email.</p><pre class="rep" id="rep">${esc(report())}</pre><p><button class="btn" id="copyRep">Copy report</button> <span class="note" id="copyMsg"></span></p></section>`;
+  return h}
+function report(){
+  const c=S.cfg,lines=['GreenLens weekly report: '+c.campus,'Data: '+S.sources.filter(x=>x.inc).map(x=>x.name).join(' + '),''];
+  S.acts.slice(0,6).forEach((a,i)=>lines.push((i+1)+'. ['+a.area+'] '+a.asset+': '+a.title,'   Fix: '+a.fix,'   Owner: '+a.owner+(a.inr!=null?' | Saves '+inr(a.inr)+'/yr':''),''));
+  lines.push('Total identified: '+inr(sum(S.acts.map(a=>a.inr||0)))+' per year, '+fmt(sum(S.acts.map(a=>a.co2))/1000,1)+' t CO2e per year.');
+  try{const p=plan();lines.push('Reduction plan targets: electricity -'+fmt(p.tot.Electricity.pct*100,1)+'%, water -'+fmt(p.tot.Water.pct*100,1)+'%, food waste -'+fmt(p.tot['Food waste'].pct*100,1)+'% per year.')}catch(_){}
+  return lines.join('\n')}
+
+function emptyState(what){return`<section class="card"><h2>No ${what} data included</h2><p class="note">Every source with ${what} data is excluded, or none was imported. Include one on the Overview tab.</p><p><button class="btn" data-go="overview">Go to data sources</button></p></section>`}
+function vEnergy(){
+  if(!MET.length)return emptyState('electricity');
+  const id=S.sel.energy,m=MET.find(x=>x.id===id),s=S.energy[id],e=S.an.e[id];
+  const wkp=prof(s,wk),wep=prof(s,p=>!wk(p)),acad=m.type==='academic';
+  const chart=lineChart({label:'Average hourly load for '+m.name,series:[{pts:wkp,cls:'ln'},{pts:wep,cls:'ln2'}],bands:[[0,6],[22,23]],hlines:acad&&e.dy?[{y:NIGHT_FLAG*e.dy,label:'Alert line: 40% of teaching-hours load'}]:[]});
+  const mine=S.acts.filter(a=>a.tab==='energy'&&a.aid===id);
+  const t=[tile('Daily use',fmt(e.kwhDay)+' kWh',inr(e.kwhDay*S.cfg.tariff)+' per day'),tile('Carbon',fmt(e.kwhDay*S.cfg.ef)+' kg CO₂','per day')];
+  if(acad&&e.ratio!=null)t.push(tile('Night load vs teaching hours',fmt(e.ratio*100)+'%','alert above 40%',e.ratio>NIGHT_FLAG?'crit':'good'));
+  else if(m.res)t.push(tile('Per resident',fmt(e.perRes,1)+' kWh/day','typical range 1.4 to 3.3',e.perRes>3.3?'crit':'good'));
+  return`<section class="card"><h2>Energy: where is power wasted?</h2>${chips('energy',MET)}<div class="tiles">${t.join('')}</div>
+  <h3>Average load by hour of day (kW)</h3><div class="chartbox">${chart}</div>
+  <div class="legend"><span><i></i>Weekdays</span><span><i class="d"></i>Weekends</span>${acad?'<span><i class="r"></i>Alert line</span>':''}<span>Shaded: 10 pm to 6 am</span></div>
+  ${uploader('energy','Columns: datetime, kWh (hourly or finer), for example 2026-10-14 09:00,118.4')}</section>
+  <section class="card"><h2>What GreenLens recommends</h2>${mine.length?mine.map(a=>actCard(a,false)).join(''):okCard('No energy inefficiency detected for '+esc(m.name))}</section>`}
+
+function vWater(){
+  if(!WAT.length)return emptyState('water');
+  const id=S.sel.water,m=WAT.find(x=>x.id===id),w=S.an.w[id],d=S.water[id];
+  const labels=w.mnf.map((_,i)=>String(new Date(w.t0+i*DAY).getUTCDate()));
+  const chart=barChart({label:'Minimum night flow per day for '+m.name,vals:w.mnf.map(x=>x||0),labels,dec:2,xlab:'Day of month (Oct 2026)',hline:{y:LEAK_FLAG*w.avgFlow,label:'Alert line: 10% of average flow'},flag:new Set(w.mnf.map((x,i)=>x/w.avgFlow>LEAK_FLAG?i:-1).filter(i=>i>=0))});
+  const prf=prof(d.s,()=>true);
+  const mine=S.acts.filter(a=>a.tab==='water'&&a.aid===id);
+  const evs=d.ev.map(e=>{const x=new Date(e.t);return dlabel(e.t)+' at '+String(x.getUTCHours()).padStart(2,'0')+':00'});
+  return`<section class="card"><h2>Water: leaks, overflow and per-person use</h2>${chips('water',WAT)}
+  <div class="tiles">${tile('Daily use (last 7 days)',fmt(w.kLday,1)+' kL',inr(w.kLday*S.cfg.wtariff)+' per day')}${tile('Per resident',fmt(w.lpd)+' L/day','norm 135 L (IS 1172)',w.lpd>148.5?'crit':'good')}${tile('Minimum night flow',fmt(w.mL,2)+' m³/h',fmt(w.ratio*100)+'% of average, alert above 10%',w.ratio>LEAK_FLAG?'crit':'good')}${tile('Overflow events',String(d.ev.length),'in the data window',d.ev.length?'warn':'good')}</div>
+  <h3>Minimum flow between 1 and 4 am, per day (m&sup3;/h)</h3><p class="note">A healthy hostel shuts down at night, so flow here means water is leaking.</p><div class="chartbox">${chart}</div>
+  <div class="legend"><span><i style="border-color:var(--accent)"></i>Normal night</span><span><i class="r"></i>Alert line</span><span style="color:var(--crit)">Red bars are above the line</span></div>
+  ${evs.length?`<p class="note"><strong>Overflow log:</strong> ${evs.join(', ')}</p>`:''}
+  ${uploader('water','Columns: datetime, m³ used in that hour, for example 2026-10-14 02:00,0.09')}</section>
+  <section class="card"><h2>What GreenLens recommends</h2>${mine.length?mine.map(a=>actCard(a,false)).join(''):okCard('No water inefficiency detected for '+esc(m.name))}</section>`}
+
+function vWaste(){
+  if(!MESS.length)return emptyState('mess food-waste');
+  const id=S.sel.waste,m=MESS.find(x=>x.id===id),a=S.waste[id],x=S.an.x['w'+id];
+  const chart=barChart({label:'Food waste per meal for '+m.name,vals:a.map(r=>r.kpm),labels:a.map(r=>String(new Date(r.t).getUTCDate())+DOW[r.dow][0]),dec:2,xlab:'Day of month (Oct 2026), with weekday initial',hline:{y:x.thr,label:'Alert line: median + 2 robust sigma'},flag:new Set(x.flagged)});
+  const mine=S.acts.filter(q=>q.tab==='waste'&&q.aid===id),kgYr=x.kgDay*365;
+  return`<section class="card"><h2>Waste: where does food go to waste?</h2>${chips('waste',MESS)}
+  <div class="tiles">${tile('Food waste',fmt(x.kgDay)+' kg/day',fmt(x.mealsDay)+' meals served per day')}${tile('Per meal',fmt(x.avg,2)+' kg','typical day: '+fmt(x.md,2)+' kg')}${tile('Spike days',String(x.flagged.length),'above the alert line',x.flagged.length?'crit':'good')}${tile('Value of food wasted',inr(kgYr*S.cfg.food)+'/yr','at '+inr(S.cfg.food)+' per kg')}${tile('If composted',fmt(kgYr*.15/1000,1)+' t CO₂e','avoided per year vs landfill')}</div>
+  <h3>Food waste per meal, per day (kg)</h3><div class="chartbox">${chart}</div>
+  <div class="legend"><span><i class="r"></i>Alert line (median + 2 robust sigma)</span><span style="color:var(--crit)">Red bars are spike days</span></div>
+  ${uploader('waste','Columns: date, meals, kg wasted, for example 2026-10-14,880,96.5')}</section>
+  <section class="card"><h2>What GreenLens recommends</h2>${mine.length?mine.map(q=>actCard(q,false)).join(''):okCard('No food-waste inefficiency detected for '+esc(m.name))}</section>`}
+
+function vWhatIf(){
+  const w=S.wi,c=S.cfg;
+  return`<section class="card"><h2>What-if simulator</h2><p class="note">Move the sliders and see the yearly effect on rupees, energy, carbon and payback. Measures are applied in sequence so savings are not double-counted.</p>
+  <div class="two"><div class="sliders">
+   <label><span class="row">AC set-point (now 22 &deg;C)<output id="o-sp"></output></span><input type="range" class="wi" id="sp" min="22" max="26" step="1" value="${w.sp}"></label>
+   <label><span class="row">Fans replaced with BLDC (of ${c.fans})<output id="o-fans"></output></span><input type="range" class="wi" id="fans" min="0" max="${c.fans}" step="10" value="${w.fans}"></label>
+   <label><span class="row">Rooftop solar<output id="o-kwp"></output></span><input type="range" class="wi" id="kwp" min="0" max="200" step="10" value="${w.kwp}"></label>
+   <div class="chk"><input type="checkbox" class="wi" id="night" ${w.night?'checked':''}><label for="night">Fix night load (timers, closing checklist)</label></div>
+   <div class="chk"><input type="checkbox" class="wi" id="leak" ${w.leak?'checked':''}><label for="leak">Repair detected water leaks</label></div>
+   <div class="chk"><input type="checkbox" class="wi" id="over" ${w.over?'checked':''}><label for="over">Fit overflow cut-offs on tanks</label></div>
+   <div class="chk"><input type="checkbox" class="wi" id="waste" ${w.waste?'checked':''}><label for="waste">Cut mess food-waste spikes</label></div>
+  </div><div id="wiOut"></div></div></section>`}
+function wiCalc(){
+  const w=S.wi,c=S.cfg,an=S.an,rows=[];
+  const nightActs=S.acts.filter(a=>a.key==='night'),nightKwh=w.night?sum(nightActs.map(a=>a.kwh)):0;
+  rows.push(['Fix night load',nightKwh*c.tariff,w.night?sum(nightActs.map(a=>a.capex)):0,nightKwh]);
+  const acSave=.5*(an.acadKwh-nightKwh)*.06*(w.sp-22);rows.push(['AC set-point to '+w.sp+' °C',acSave*c.tariff,0,acSave]);
+  const fanSave=w.fans*(75-32)/1000*10*365;rows.push([w.fans+' BLDC fans',fanSave*c.tariff,w.fans*CAPEX.bldc,fanSave]);
+  const rem=Math.max(0,an.totalKwh-nightKwh-acSave-fanSave),solar=Math.min(w.kwp*1500,rem);rows.push([w.kwp+' kWp solar',solar*c.tariff,w.kwp*CAPEX.solar,solar]);
+  const pick=k=>S.acts.filter(a=>a.key===k);
+  const lk=w.leak?pick('leak'):[],ov=w.over?pick('over'):[],ws=w.waste?pick('waste').concat(pick('waste2')):[];
+  rows.push(['Repair leaks',sum(lk.map(a=>a.inr)),sum(lk.map(a=>a.capex)),0]);
+  rows.push(['Overflow cut-offs',sum(ov.map(a=>a.inr)),sum(ov.map(a=>a.capex)),0]);
+  rows.push(['Food-waste spikes',sum(ws.map(a=>a.inr)),0,0]);
+  const kwh=sum(rows.map(r=>r[3])),save=sum(rows.map(r=>r[1])),capex=sum(rows.map(r=>r[2])),kL=sum(lk.concat(ov).map(a=>a.kL)),kg=sum(ws.map(a=>a.kg)),co2=kwh*c.ef+kg*.15;
+  return{rows,kwh,save,capex,kL,kg,co2,pay:save>0?capex/save:null}}
+function updateWI(){
+  const w=S.wi,o=wiCalc();
+  $('#o-sp').textContent=w.sp+' °C';$('#o-fans').textContent=w.fans;$('#o-kwp').textContent=w.kwp+' kWp';
+  $('#wiOut').innerHTML=`<div class="tiles">${tile('Saved per year',inr(o.save),'')}${tile('Energy',fmt(o.kwh/1000,1)+' MWh',fmt(S.an.totalKwh?o.kwh/S.an.totalKwh*100:0)+'% of campus use')}${tile('Carbon avoided',fmt(o.co2/1000,1)+' t CO₂e','per year')}${tile('Investment',inr(o.capex),'one-time estimate')}${tile('Payback',o.pay==null?'n/a':(o.pay<.1?'under 1 month':fmt(o.pay,1)+' years'),'simple payback')}${tile('Water and food',fmt(o.kL)+' kL, '+fmt(o.kg)+' kg','saved per year')}</div>
+  <div class="tblwrap"><table><thead><tr><th>Measure</th><th class="n">Saves per year</th><th class="n">Cost</th></tr></thead><tbody>${o.rows.filter(r=>r[1]>0||r[2]>0).map(r=>`<tr><td>${esc(r[0])}</td><td class="n">${inr(r[1])}</td><td class="n">${r[2]?inr(r[2]):'none'}</td></tr>`).join('')||'<tr><td colspan="3">Pick a measure to see its effect.</td></tr>'}</tbody></table></div>
+  <div class="tools"><button class="btn ghost" data-export="whatif">Export results CSV</button></div>
+  <p class="note">Equipment prices (BLDC ${inr(CAPEX.bldc)} each, solar ${inr(CAPEX.solar)} per kW, timers ${inr(CAPEX.timer)}, leak repair ${inr(CAPEX.leak)}) are assumptions. Get local quotes.</p>`}
+
+/* ---------- reduction plan: measurable ways to cut consumption ---------- */
+/* Assumptions (editable here): academic AC share 50%, AC at 22 C today, occupancy sensors cut 10% of what is left,
+   leaderboard feedback cuts 5% of hostel use, taps are 30% of hostel water and aerators cut tap flow by a third. */
+const PLAN_COST={occ:100000,led:350,aerator:150,compost:60000};
+function plan(){
+  const c=S.cfg,an=S.an,P=S.plan,A=S.acts,pick=k=>A.filter(a=>a.key===k);
+  const acadM=MET.filter(m=>m.type==='academic'),hostM=MET.filter(m=>m.type==='hostel');
+  const kwhYr=l=>sum(l.map(m=>an.e[m.id].kwhDay))*365;
+  const base={Electricity:an.totalKwh,Water:an.waterKL*365,'Food waste':an.wasteKg*365};
+  let acad=kwhYr(acadM),host=kwhYr(hostM),water=base.Water,food=base['Food waste'];
+  const hostRes=sum(hostM.map(m=>m.res||0)),watRes=sum(WAT.map(m=>m.res||0)),rows=[];
+  const price={Electricity:c.tariff,Water:c.wtariff,'Food waste':c.food};
+  const add=o=>{o.avail=o.avail!==false&&o.saved>0;o.on=o.avail&&!!P[o.id];
+    o.inr=o.divert?0:o.saved*price[o.res];o.co2=o.res==='Electricity'?o.saved*c.ef:o.res==='Food waste'?o.saved*.15:0;
+    o.pct=!o.divert&&base[o.res]?o.saved/base[o.res]:0;o.pay=o.capex&&o.inr>0?o.capex/o.inr:null;rows.push(o);return o.on};
+  /* electricity, academic blocks */
+  const na=pick('night'),nk=Math.min(sum(na.map(a=>a.kwh)),acad),rat=acadM.map(m=>an.e[m.id].ratio).filter(v=>v!=null),worst=rat.length?Math.max(...rat):null;
+  if(add({id:'night',res:'Electricity',name:'Switch off academic blocks after hours',how:'Timers on AC and lighting circuits, a closing checklist and a weekly after-hours walk-through.',
+    saved:nk,unit:'kWh',capex:CAPEX.timer*na.length,avail:na.length>0,why:'No academic block has high night load.',
+    kpi:'Night load vs teaching hours, worst block',cur:worst==null?'n/a':fmt(worst*100)+'%',tgt:'20% or less',st:worst==null?'na':worst<=.2?'met':'off',owner:'Estate and electrical office',when:'Week 1'}))acad-=nk;
+  const ac=acad*.5*.06*2;
+  if(add({id:'ac',res:'Electricity',name:'Set classroom and office ACs to 24 °C',how:'Default every AC remote to 24 °C. BEE: about 6% less AC energy per degree. Assumes ACs are half of academic use and run at 22 °C today.',
+    saved:ac,unit:'kWh',capex:0,avail:acadM.length>0,why:'No academic electricity data included.',kpi:'AC set-point',cur:'22 °C (assumed)',tgt:'24 °C',st:'na',owner:'Estate office',when:'Week 1'}))acad-=ac;
+  const occ=acad*.10,acadNow=kwhYr(acadM)/365;
+  if(add({id:'occ',res:'Electricity',name:'Occupancy sensors in classrooms and labs',how:'Lights, fans and ACs switch off after 15 minutes in an empty room. Assumes a 10% cut in what is left (pilots report 10 to 30%).',
+    saved:occ,unit:'kWh',capex:PLAN_COST.occ,avail:acadM.length>0,why:'No academic electricity data included.',kpi:'Academic electricity per day',cur:fmt(acadNow)+' kWh',tgt:fmt((acad-occ)/365)+' kWh',st:'na',owner:'Estate office',when:'Months 1 to 2'}))acad-=occ;
+  /* electricity, hostels */
+  const hostNow=hostRes?kwhYr(hostM)/365/hostRes:null;
+  const fan=Math.min(c.fans*(75-32)/1000*10*365,host*.4),fanRow={id:'bldc',res:'Electricity',name:'Replace '+fmt(c.fans)+' hostel fans with BLDC fans',how:'BLDC fans draw about 32 W against 75 W for old fans, at 10 hours a day. Fan count is in Campus settings.',
+    saved:fan,unit:'kWh',capex:c.fans*CAPEX.bldc,avail:hostM.length>0,why:'No hostel electricity data included.',kpi:'Hostel electricity per resident per day',cur:hostNow==null?'n/a':fmt(hostNow,2)+' kWh',tgt:'',st:'na',owner:'Wardens and estate office',when:'Months 1 to 3'};
+  if(add(fanRow))host-=fan;
+  const led=Math.min(c.tubes*(36-18)/1000*10*365,host*.3);
+  if(add({id:'led',res:'Electricity',name:'Replace '+fmt(c.tubes)+' hostel tube lights with 18 W LED tubes',how:'An 18 W LED tube gives the same light as a 36 W fluorescent tube, at 10 hours a day. Tube count is in Campus settings.',
+    saved:led,unit:'kWh',capex:c.tubes*PLAN_COST.led,avail:hostM.length>0,why:'No hostel electricity data included.',kpi:'Share of tube lights that are LED',cur:'Not measured',tgt:'100%',st:'na',owner:'Estate office',when:'Months 1 to 2'}))host-=led;
+  const fb=host*.05;
+  if(add({id:'feedback',res:'Electricity',name:'Publish the hostel leaderboard every week',how:'Show each hostel its units per resident against the others. Assumes a conservative 5% cut (studies report up to 15%).',
+    saved:fb,unit:'kWh',capex:0,avail:hostM.length>1,why:'Needs at least two hostels.',kpi:'Leaderboard published',cur:'Not yet',tgt:'Every Monday',st:'na',owner:'Student council and wardens',when:'Week 1'}))host-=fb;
+  fanRow.tgt=hostRes?fmt(host/365/hostRes,2)+' kWh (after all hostel measures)':'n/a';
+  if(hostNow!=null&&fanRow.on)fanRow.st=hostNow<=host/365/hostRes?'met':'off';
+  const kwp=S.wi.kwp,sol=Math.min(kwp*1500,Math.max(0,acad+host));
+  add({id:'solar',res:'Electricity',name:'Rooftop solar, '+kwp+' kWp',how:'About 1,500 kWh per kWp per year. This cuts electricity bought from the grid, not use. Change the size on the What-if tab.',
+    saved:sol,unit:'kWh',capex:kwp*CAPEX.solar,avail:MET.length>0&&kwp>0,why:kwp>0?'No electricity data included.':'Set a size above 0 kWp on the What-if tab.',kpi:'Solar generation per day',cur:'0 kWh',tgt:fmt(kwp*1500/365)+' kWh',st:'na',owner:'Estate office',when:'Months 3 to 6'});
+  /* water */
+  const lk=pick('leak'),lkL=Math.min(sum(lk.map(a=>a.kL)),water),wr=WAT.map(m=>an.w[m.id].ratio),wWorst=wr.length?Math.max(...wr):null;
+  if(add({id:'leak',res:'Water',name:'Repair the leaks GreenLens found',how:'Walk the risers between 1 and 4 am, fix float valves, flush valves and pipe joints, then confirm night flow drops.',
+    saved:lkL,unit:'kL',capex:CAPEX.leak*lk.length,avail:lk.length>0,why:'No leak found in the included data.',kpi:'Night flow vs average flow, worst meter',cur:wWorst==null?'n/a':fmt(wWorst*100)+'%',tgt:'under 10%',st:wWorst==null?'na':wWorst<LEAK_FLAG?'met':'off',owner:'Wardens and plumbing contractor',when:'Week 1'}))water-=lkL;
+  const ov=pick('over'),ovL=Math.min(sum(ov.map(a=>a.kL)),water),evW=sum(WAT.map(m=>S.water[m.id].ev.length/Math.max(1,an.w[m.id].nd/7)));
+  if(add({id:'over',res:'Water',name:'Fit overflow cut-offs on overhead tanks',how:'A float switch or level sensor stops the pump when the tank is full, plus a pump timer.',
+    saved:ovL,unit:'kL',capex:CAPEX.float*ov.length,avail:ov.length>0,why:'No tank overflow in the included data.',kpi:'Tank overflows per week',cur:fmt(evW,1),tgt:'0',st:evW===0?'met':'off',owner:'Pump operator',when:'Weeks 1 to 2'}))water-=ovL;
+  const aer=water*.3*.33,lpdNow=watRes?an.waterKL*1000/watRes:null;
+  if(add({id:'aer',res:'Water',name:'Fit 4 L/min aerators on hostel taps',how:'IGBC baseline taps run at 6 L/min; 4 L/min aerators cut tap flow by about a third. Assumes taps are 30% of hostel water and one tap per 4 residents.',
+    saved:aer,unit:'kL',capex:Math.ceil(watRes/4)*PLAN_COST.aerator,avail:WAT.length>0,why:'No water data included.',kpi:'Litres per resident per day',cur:lpdNow==null?'n/a':fmt(lpdNow)+' L',tgt:watRes?fmt((water-aer)/365*1000/watRes)+' L (norm 135 L)':'n/a',st:lpdNow==null?'na':lpdNow<=135?'met':'off',owner:'Wardens',when:'Month 1'}))water-=aer;
+  /* food waste */
+  const sp=pick('waste'),spK=Math.min(sum(sp.map(a=>a.kg)),food),spDays=sum(MESS.map(m=>an.x['w'+m.id].flagged.length));
+  if(add({id:'spike',res:'Food waste',name:'Cook to a headcount forecast on spike days',how:'Take a meal count the evening before, cook to it on the days GreenLens flags, and pass surplus to a food-rescue partner.',
+    saved:spK,unit:'kg',capex:0,avail:sp.length>0,why:'No food-waste spikes in the included data.',kpi:'Spike days in the data window',cur:String(spDays),tgt:'0',st:spDays===0?'met':'off',owner:'Mess managers',when:'Week 1'}))food-=spK;
+  const po=pick('waste2'),poK=Math.min(sum(po.map(a=>a.kg)),food),avgs=MESS.map(m=>an.x['w'+m.id].avg),mMed=avgs.length?median(avgs):0,mWorst=avgs.length?Math.max(...avgs):null;
+  if(add({id:'portion',res:'Food waste',name:'Smaller default portions and half-portion option',how:'Serve a smaller first helping with free refills, and drop or resize the dishes with the most leftovers.',
+    saved:poK,unit:'kg',capex:0,avail:po.length>0,why:'Every mess is close to the median.',kpi:'Food waste per meal, worst mess',cur:mWorst==null?'n/a':fmt(mWorst,2)+' kg',tgt:fmt(mMed*1.1,2)+' kg or less',st:mWorst==null?'na':mWorst<=mMed*1.1?'met':'off',owner:'Mess managers',when:'Weeks 1 to 4'}))food-=poK;
+  add({id:'compost',res:'Food waste',divert:true,name:'Compost the remaining food waste on campus',how:'Diverts what is left from landfill. It does not reduce the waste itself, so it is not counted in the reduction target.',
+    saved:Math.max(0,food),unit:'kg',capex:PLAN_COST.compost,avail:MESS.length>0,why:'No mess data included.',kpi:'Share of food waste composted',cur:'0% (assumed)',tgt:'100%',st:'na',owner:'Estate office and eco club',when:'Months 1 to 3'});
+  const tot={};Object.keys(base).forEach(k=>{const cut=sum(rows.filter(r=>r.on&&!r.divert&&r.res===k).map(r=>r.saved));tot[k]={base:base[k],cut,after:Math.max(0,base[k]-cut),pct:base[k]?cut/base[k]:0}});
+  const on=rows.filter(r=>r.on),inrT=sum(on.map(r=>r.inr)),capT=sum(on.map(r=>r.capex||0));
+  return{rows,tot,inr:inrT,co2:sum(on.map(r=>r.co2)),capex:capT,pay:inrT>0?capT/inrT:null}}
+const UNIT={Electricity:['MWh',1000],Water:['kL',1],'Food waste':['tonnes',1000]};
+const stPill=st=>st==='met'?'<span class="pill ok">On target</span>':st==='off'?'<span class="pill high">Off target</span>':'<span class="pill na">Track</span>';
+function vPlan(){
+  if(!MET.length&&!WAT.length&&!MESS.length)return emptyState('electricity, water or mess');
+  const p=plan(),u=k=>UNIT[k];
+  const tg=k=>{const t=p.tot[k],[un,dv]=u(k),w=t.base?Math.round(t.after/t.base*100):0;
+    return`<div class="tg"><div class="k">${k}${k==='Electricity'?' bought from the grid':''}, per year</div><div class="v">${fmt(t.base/dv,dv>1?1:0)} → ${fmt(t.after/dv,dv>1?1:0)} ${un}</div><div class="cut">${t.base?'−'+fmt(t.pct*100,1)+'%':'no data'}</div>
+    <div class="bar2"><span>Today</span><span class="b" style="width:100%"></span><span>Target</span><span class="b t" style="width:${w}%"></span></div></div>`};
+  const card=r=>{const [un]=[r.unit],q=fmt(r.saved)+' '+un+'/yr';
+    return`<article class="pm${r.avail?'':' na'}"><div class="pm-h"><input type="checkbox" class="pl" id="pl-${r.id}" data-pl="${r.id}" ${r.on?'checked':''} ${r.avail?'':'disabled'} aria-label="Adopt: ${esc(r.name)}"><div><h3><label for="pl-${r.id}">${esc(r.name)}</label></h3><p class="note" style="margin:2px 0 0">${esc(r.how)}</p></div></div>
+    ${r.avail?`<div class="stats"><span>${r.divert?'Diverts':'Saves'} <b>${q}</b>${r.divert?'':' ('+fmt(r.pct*100,1)+'% of '+r.res.toLowerCase()+')'}</span>${r.inr?`<span><b>${inr(r.inr)}</b>/yr</span>`:''}${r.co2?`<span><b>${fmt(r.co2/1000,1)} t</b> CO₂e/yr</span>`:''}<span>Cost <b>${r.capex?inr(r.capex):'none'}</b></span><span>Payback <b>${r.capex?(r.pay==null?'n/a':r.pay<.1?'under 1 month':fmt(r.pay,1)+' yr'):'immediate'}</b></span></div>
+    <div class="kpi"><span>KPI: ${esc(r.kpi)}</span><span>now <b>${esc(r.cur)}</b> → target <b>${esc(r.tgt)}</b></span>${stPill(r.st)}<span class="note" style="margin:0">${esc(r.owner)} · ${esc(r.when)}</span></div>`:`<p class="note">Not needed now: ${esc(r.why)}</p>`}</article>`};
+  const sec=k=>{const rs=p.rows.filter(r=>r.res===k);return`<section class="card"><h2>${k}</h2>${rs.map(card).join('')}</section>`};
+  return`<section class="card"><h2>Reduction plan: measurable ways to cut consumption</h2><p class="note">Each measure shows how much it saves per year, its share of today's use, rupees, CO₂, cost, payback and a KPI to track. Tick the measures the campus commits to. Savings are applied one after another, so nothing is counted twice. Import next month's data and the KPIs show whether targets are met.</p>
+  <div class="targets">${['Electricity','Water','Food waste'].map(tg).join('')}</div>
+  <div class="tiles">${tile('Saved per year',inr(p.inr),'adopted measures')}${tile('Carbon avoided',fmt(p.co2/1000,1)+' t CO₂e','per year')}${tile('Investment',inr(p.capex),'one-time estimate')}${tile('Payback',p.pay==null?'n/a':p.pay<.1?'under 1 month':fmt(p.pay,1)+' years','simple payback')}</div>
+  <div class="tools"><button class="btn ghost" data-export="plan">Export plan CSV</button></div></section>
+  ${sec('Electricity')}${sec('Water')}${sec('Food waste')}
+  <p class="note">Prices for sensors (${inr(PLAN_COST.occ)} per campus pilot), LED tubes (${inr(PLAN_COST.led)} each), aerators (${inr(PLAN_COST.aerator)} each) and a composter (${inr(PLAN_COST.compost)}) are assumptions. Get local quotes.</p>`}
+
+function vLeader(){
+  const hs=MET.filter(m=>m.type==='hostel').map(m=>{const e=S.an.e[m.id].perRes,wl=S.an.w[m.id]?S.an.w[m.id].lpd:null,x=S.an.x['w'+m.id]?S.an.x['w'+m.id].avg:null;return{m,e,w:wl,f:x}});
+  const avg=k=>mean(hs.map(h=>h[k]).filter(v=>v!=null));
+  hs.forEach(h=>{const r=[h.e/avg('e'),h.w!=null?h.w/avg('w'):null,h.f!=null?h.f/avg('f'):null].filter(v=>v!=null);h.idx=mean(r)*100});
+  hs.sort((a,b)=>a.idx-b.idx);
+  const mx=k=>Math.max(...hs.map(h=>h[k]||0));
+  const bar=(v,k,d)=>v==null?'n/a':fmt(v,d)+`<span class="mini" style="width:${Math.round(v/mx(k)*70)}px"></span>`;
+  return`<section class="card"><h2>Hostel leaderboard</h2><p class="note">Fair comparison per resident and per meal. Index 100 is the hostel average, and lower is better. Publish it weekly to turn saving into a friendly contest.</p>
+  <div class="tblwrap"><table><thead><tr><th>Rank</th><th>Hostel</th><th class="n">kWh per resident per day</th><th class="n">Litres per resident per day</th><th class="n">Food waste kg per meal</th><th class="n">Index</th></tr></thead><tbody>
+  ${hs.map((h,i)=>`<tr><td class="rank">${i+1}</td><td>${esc(h.m.name)}${i===0?' <span class="pill ok">Greenest this fortnight</span>':''}</td><td class="n">${bar(h.e,'e',1)}</td><td class="n">${bar(h.w,'w',0)}</td><td class="n">${bar(h.f,'f',2)}</td><td class="n"><strong>${fmt(h.idx)}</strong></td></tr>`).join('')}</tbody></table></div></section>`}
+
+/* ---------- render and events ---------- */
+function render(){
+  $('#campusLine').textContent=S.cfg.campus+' · smart campus resource dashboard';
+  $('#tabs').innerHTML=TABS.map(t=>`<a href="#${t[0]}" ${S.tab===t[0]?'aria-current="page"':''}>${t[1]}</a>`).join('');
+  let v;
+  try{v=({overview:vOverview,energy:vEnergy,water:vWater,waste:vWaste,plan:vPlan,whatif:vWhatIf,leaderboard:vLeader}[S.tab]||vOverview)()}
+  catch(err){console.error(err);v=`<section class="card"><h2>This tab could not be shown</h2><p class="note">Error: ${esc(err&&err.message||err)}. This usually means a data file has an unexpected format. Exclude the last file you imported on the Overview tab, or reset to the sample data.</p><p><button class="btn" data-go="overview">Go to data sources</button> <button class="link a" data-reset="1">Reset to sample data only</button></p></section>`}
+  const inc=S.sources.filter(x=>x.inc).length;$('.badge').textContent=inc+' of '+S.sources.length+' data source'+(S.sources.length>1?'s':'')+' included';
+  $('#view').innerHTML=xpHtml()+v;if(S.tab==='whatif'&&$('#wiOut')){try{updateWI()}catch(err){console.error(err);$('#wiOut').innerHTML='<div class="msg">Could not calculate: '+esc(err.message)+'</div>'}}}
+function go(t){S.tab=TABS.some(x=>x[0]===t)?t:'overview';S.msg='';S.xp=null;render();try{if(location.hash!=='#'+S.tab)history.replaceState(null,'','#'+S.tab)}catch(_){}window.scrollTo(0,0)}
+function route(){S.xp=null;const h=location.hash.slice(1);S.tab=TABS.some(t=>t[0]===h)?h:'overview';S.msg='';render();window.scrollTo(0,0)}
+function splitLine(line){const out=[];let cur='',q=false;for(let i=0;i<line.length;i++){const c=line[i];
+  if(q){if(c==='"'){if(line[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}else if(c==='"')q=true;else if(c===','){out.push(cur.trim());cur=''}else cur+=c}
+  out.push(cur.trim());return out}
+function tsOf(str){str=String(str||'').trim();if(!str)return null;
+  const hm=str.match(/(?:[ T](\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(am|pm)?)?\s*$/i);
+  let h=hm&&hm[1]!=null?+hm[1]:0;const ap=hm&&hm[3]?hm[3].toLowerCase():'';if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;
+  let y,mo,d,m=str.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m){y=+m[1];mo=+m[2];d=+m[3]}
+  else{m=str.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);if(!m)return null;
+    const p1=+m[1],p2=+m[2];y=+m[3];if(p2>12&&p1<=12){mo=p1;d=p2}else{d=p1;mo=p2}}
+  if(mo<1||mo>12||d<1||d>31||h>23)return null;return Date.UTC(y,mo-1,d,h)}
+const isCampus=text=>{const h=splitLine((text.split(/\r?\n/).find(l=>l.trim())||'').replace(/^﻿/,'')).map(x=>x.toLowerCase());return h.includes('kind')&&h.includes('asset')};
+/* first cell that reads as a date, then the next numeric cell(s) */
+function rowVals(r){const i=r.findIndex(c=>tsOf(c)!=null);if(i<0)return null;const nums=r.slice(i+1).map(c=>parseFloat(String(c).replace(/[^\d.\-]/g,''))).filter(v=>!isNaN(v));return{t:tsOf(r[i]),nums}}
+const mkPt=(t,v)=>{const d=new Date(t);return{t,h:d.getUTCHours(),dow:d.getUTCDay(),v}};
+function parseCSV(text){
+  const agg=new Map();
+  text.split(/\r?\n/).forEach(line=>{const x=rowVals(splitLine(line));if(!x||!x.nums.length)return;agg.set(x.t,(agg.get(x.t)||0)+x.nums[0])});
+  return[...agg.keys()].sort((a,b)=>a-b).map(t=>mkPt(t,agg.get(t)))}
+function wasteRow(t,meals,kg){const kpm=kg/meals;return{t,dow:new Date(t).getUTCDay(),meals,kpm,kg}}
+function parseWaste(text){const m=new Map();
+  text.split(/\r?\n/).forEach(line=>{const x=rowVals(splitLine(line));if(!x||x.nums.length<2||!(x.nums[0]>0))return;const t=Date.UTC(new Date(x.t).getUTCFullYear(),new Date(x.t).getUTCMonth(),new Date(x.t).getUTCDate());m.set(t,wasteRow(t,x.nums[0],x.nums[1]))});
+  return[...m.keys()].sort((a,b)=>a-b).map(t=>m.get(t))}
+
+/* ---------- campus-wide import ---------- */
+function importAll(text,fname){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());if(!lines.length)return'The file is empty.';
+  const head=splitLine(lines[0].replace(/^\uFEFF/,'')).map(x=>x.toLowerCase()),ix=k=>head.indexOf(k);
+  if(['kind','asset','datetime','value'].some(k=>ix(k)<0))return'Header must include kind, asset, datetime, value (optional: meals, name, type, res). Export the campus CSV to see a template.';
+  const g={};
+  lines.slice(1).forEach(l=>{const r=splitLine(l),kind=(r[ix('kind')]||'').toLowerCase(),asset=r[ix('asset')];
+    if(!['energy','water','waste','overflow'].includes(kind)||!asset)return;
+    const t=tsOf(r[ix('datetime')]),v=parseFloat(r[ix('value')]);if(t==null||isNaN(v))return;
+    const o=g[kind+':'+asset]||(g[kind+':'+asset]={kind,asset,rows:new Map(),meta:{}});
+    const meals=ix('meals')>=0?parseFloat(r[ix('meals')]):NaN;
+    if(kind==='waste'){if(meals>0)o.rows.set(t,wasteRow(t,meals,v))}else if(kind==='overflow')o.rows.set(t,v);else o.rows.set(t,(o.rows.get(t)||0)+v);
+    ['name','type','res'].forEach(k=>{if(ix(k)>=0&&r[ix(k)])o.meta[k]=r[ix(k)]})});
+  const done={energy:0,water:0,waste:0},notes=[],src=newSrc(fname||'Imported CSV'),known=(l,id)=>l.find(x=>x.id===id)||{};
+  Object.values(g).forEach(o=>{const n=o.rows.size,{kind,asset,meta}=o;
+    if(kind==='overflow')return;
+    if(kind==='waste'?n<5:n<48){notes.push(kind+' '+asset+' skipped (too few rows)');return}
+    const res=meta.res?Math.round(+meta.res):null;
+    if(kind==='energy'){const k=known(MET,asset);
+      const m={id:asset,name:meta.name||k.name||asset,type:(meta.type==='hostel'||meta.type==='academic')?meta.type:(k.type||'academic'),res:res||k.res};
+      if(m.type==='hostel'&&!m.res){m.res=100;notes.push(m.name+': residents missing, assumed 100')}
+      src.assets.energy.push(m);src.data.energy[asset]=[...o.rows.keys()].sort((a,b)=>a-b).map(t=>mkPt(t,o.rows.get(t)))}
+    else if(kind==='water'){const k=known(WAT,asset),m={id:asset,name:meta.name||k.name||asset,res:res||k.res||100};
+      if(!res&&!k.res)notes.push(m.name+': residents missing, assumed 100');
+      src.assets.water.push(m);src.data.water[asset]={s:[...o.rows.keys()].sort((a,b)=>a-b).map(t=>mkPt(t,o.rows.get(t))),ev:[]}}
+    else{const k=known(MESS,asset),m={id:asset,name:meta.name||k.name||asset,res:res||k.res||100};
+      src.assets.waste.push(m);src.data.waste[asset]=[...o.rows.keys()].sort((a,b)=>a-b).map(t=>o.rows.get(t))}
+    done[kind]++});
+  Object.values(g).filter(o=>o.kind==='overflow').forEach(o=>{if(src.data.water[o.asset])src.data.water[o.asset].ev=[...o.rows.keys()].sort((a,b)=>a-b).map(t=>({t,kL:o.rows.get(t)}))});
+  const total=done.energy+done.water+done.waste;if(!total)return'No usable rows found in '+(fname||'the file')+'. '+notes.join('. ');
+  srcRows(src);S.sources.push(src);rebuild();
+  return'Added '+src.name+': '+done.energy+' electricity, '+done.water+' water and '+done.waste+' mess assets. It is included now; untick it below to exclude it.'+(notes.length?' '+notes.join('. ')+'.':'')}
+function addSingle(kind,fname,data){
+  const list={energy:MET,water:WAT,waste:MESS}[kind],m={...list.find(x=>x.id===S.sel[kind])},src=newSrc(fname+' ('+m.name+')');
+  src.assets[kind].push(m);src.data[kind][m.id]=data;srcRows(src);S.sources.push(src);rebuild();
+  return'Added '+src.name+' as a data source. It replaces this asset while included; untick it on the Overview tab to exclude it.'}
+
+/* ---------- export ---------- */
+const pad=n=>String(n).padStart(2,'0');
+const iso=t=>{const d=new Date(t);return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+' '+pad(d.getUTCHours())+':00'};
+const isod=t=>iso(t).slice(0,10);
+const qv=v=>{v=String(v==null?'':v);return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+const toCSV=rows=>rows.map(r=>r.map(qv).join(',')).join('\n');
+function campusRows(as,d){const rows=[['kind','asset','datetime','value','meals','name','type','res']];
+  as.energy.forEach(m=>d.energy[m.id].forEach((p,i)=>rows.push(['energy',m.id,iso(p.t),+p.v.toFixed(3),'',i?'':m.name,i?'':m.type,i?'':(m.res||'')])));
+  as.water.forEach(m=>d.water[m.id].s.forEach((p,i)=>rows.push(['water',m.id,iso(p.t),+p.v.toFixed(3),'',i?'':m.name,'',i?'':m.res])));
+  as.water.forEach(m=>d.water[m.id].ev.forEach(e=>rows.push(['overflow',m.id,iso(e.t),e.kL,'','','',''])));
+  as.waste.forEach(m=>d.waste[m.id].forEach((r,i)=>rows.push(['waste',m.id,isod(r.t),+r.kg.toFixed(2),r.meals,i?'':m.name,'',i?'':m.res])));
+  return rows}
+function buildExport(kind){
+  let rows,name;
+  if(kind==='energy'||kind==='water'){const id=S.sel[kind],s=kind==='energy'?S.energy[id]:S.water[id].s;
+    rows=[['datetime',kind==='energy'?'kWh':'m3'],...s.map(p=>[iso(p.t),+p.v.toFixed(3)])];name=kind+'_'+id+'.csv'}
+  else if(kind==='waste'){const a=S.waste[S.sel.waste];rows=[['date','meals','kg'],...a.map(r=>[isod(r.t),r.meals,+r.kg.toFixed(2)])];name='waste_'+S.sel.waste+'.csv'}
+  else if(kind==='actions'){rows=[['area','asset','severity','title','fix','owner','saving_inr_per_year','kwh_per_year','kl_per_year','kg_per_year','co2e_kg_per_year'],
+    ...S.acts.map(a=>[a.area,a.asset,a.sev,a.title,a.fix,a.owner,a.inr==null?'':Math.round(a.inr),Math.round(a.kwh||0),Math.round(a.kL||0),Math.round(a.kg||0),Math.round(a.co2)])];name='greenlens_actions.csv'}
+  else if(kind==='plan'){const p=plan();rows=[['resource','measure','adopted','saves_per_year','unit','pct_of_baseline','inr_per_year','co2e_kg_per_year','cost_inr','payback_years','kpi','current','target','status','owner','timeline'],
+    ...p.rows.filter(r=>r.avail).map(r=>[r.res,r.name,r.on?'yes':'no',Math.round(r.saved),r.unit,r.divert?'':+(r.pct*100).toFixed(1),Math.round(r.inr),Math.round(r.co2),r.capex||0,r.pay==null?'':+r.pay.toFixed(2),r.kpi,r.cur,r.tgt,r.st,r.owner,r.when])];
+    Object.entries(p.tot).forEach(([k,t])=>rows.push(['TOTAL '+k,'baseline '+Math.round(t.base)+' to target '+Math.round(t.after),'',Math.round(t.cut),UNIT[k][0]==='MWh'?'kWh':UNIT[k][0]==='tonnes'?'kg':'kL',+(t.pct*100).toFixed(1),'','','','','','','','','','']));name='greenlens_reduction_plan.csv'}
+  else if(kind==='whatif'){const o=wiCalc();rows=[['measure','saves_inr_per_year','cost_inr'],...o.rows.map(r=>[r[0],Math.round(r[1]),Math.round(r[2])]),['TOTAL',Math.round(o.save),Math.round(o.capex)],['CO2e avoided kg per year',Math.round(o.co2),''],['Payback years',o.pay==null?'':+o.pay.toFixed(2),'']];name='greenlens_whatif.csv'}
+  else if(kind.startsWith('src:')){const src=S.sources.find(x=>x.id===kind.slice(4));rows=campusRows(src.assets,src.data);
+    name=(src.builtin?'greenlens_sample':src.name.replace(/\.csv.*$/i,'').replace(/[^\w-]+/g,'_'))+'.csv'}
+  else{rows=campusRows({energy:MET,water:WAT,waste:MESS},{energy:S.energy,water:S.water,waste:S.waste});name='greenlens_included_data.csv'}
+  return{name,rows:rows.length-1,text:toCSV(rows)}}
+function xpHtml(){if(!S.xp)return'';const x=S.xp;
+  return`<div class="xp" role="region" aria-label="Export"><strong>${esc(x.name)}</strong><p class="note">${fmt(x.rows)} rows. Download it, or copy and paste into a spreadsheet.</p><textarea id="xpText" readonly aria-label="CSV contents">${esc(x.text)}</textarea><div class="row"><button class="btn" id="xpDl">Download file</button><button class="btn ghost" id="xpCp">Copy</button><button class="link a" id="xpX">Close</button><span class="note" id="xpMsg"></span></div></div>`}
+async function saveXp(){const x=S.xp,m=$('#xpMsg');
+  try{const d=(window.claude&&window.claude.use)?await window.claude.use('downloads'):null;
+    if(d){await d.save({filename:x.name,data:x.text});m.textContent='Saved.';return}}
+  catch(e){if(e&&e.code==='declined'){m.textContent='Download cancelled.';return}}
+  try{const u=URL.createObjectURL(new Blob([x.text],{type:'text/csv'})),a=document.createElement('a');a.href=u;a.download=x.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);m.textContent='Download started. If nothing happens, use Copy.'}
+  catch(_){m.textContent='Download blocked here. Use Copy instead.'}}
+function copyText(txt,el){try{navigator.clipboard.writeText(txt).then(()=>{el.textContent='Copied.'},()=>{el.textContent='Copy blocked here. Select the text and copy it.'})}catch(_){el.textContent='Copy blocked here. Select the text and copy it.'}}
+
+document.addEventListener('click',e=>{
+  const tabLink=e.target.closest('nav.tabs a');
+  if(tabLink){e.preventDefault();go(tabLink.getAttribute('href').slice(1));return}
+  const rm=e.target.closest('[data-rm]');
+  if(rm){const i=S.sources.findIndex(x=>x.id===rm.dataset.rm),nm=S.sources[i].name;S.sources.splice(i,1);rebuild();S.xp=null;S.msg='Removed '+nm+'.';analyze();render();return}
+  const xs=e.target.closest('[data-xsrc]');
+  if(xs){S.xp=buildExport('src:'+xs.dataset.xsrc);render();window.scrollTo(0,0);return}
+  const ex=e.target.closest('[data-export]');
+  if(ex){S.xp=buildExport(ex.dataset.export);render();window.scrollTo(0,0);return}
+  if(e.target.id==='xpDl'){saveXp();return}
+  if(e.target.id==='xpCp'){const t=$('#xpText');t.select();copyText(S.xp.text,$('#xpMsg'));return}
+  if(e.target.id==='xpX'){S.xp=null;render();return}
+  const sel=e.target.closest('[data-sel]');
+  if(sel){const[k,id]=sel.dataset.sel.split(':');S.sel[k]=id;S.msg='';render();return}
+  const goEl=e.target.closest('[data-go]');
+  if(goEl){const[t,id]=goEl.dataset.go.split(':');if(id)S.sel[t]=id;go(t);return}
+  if(e.target.closest('[data-reset]')){loadSample();S.msg='';analyze();render();return}
+  if(e.target.id==='copyRep'){copyText($('#rep').textContent,$('#copyMsg'))}});
+document.addEventListener('input',e=>{
+  if(!e.target.classList.contains('wi'))return;
+  const el=e.target;S.wi[el.id]=el.type==='checkbox'?el.checked:Number(el.value);updateWI()});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.classList&&el.classList.contains('pl')){S.plan[el.dataset.pl]=el.checked;render();return}
+  if(el.dataset&&el.dataset.src){const x=S.sources.find(q=>q.id===el.dataset.src);x.inc=el.checked;rebuild();S.xp=null;
+    S.msg=(el.checked?'Included ':'Excluded ')+x.name+'.';analyze();render();return}
+  if(el.dataset&&el.dataset.up){const kind=el.dataset.up,f=el.files[0];if(!f)return;
+    f.text().then(txt=>{
+      if(kind==='all'||isCampus(txt)){S.msg=importAll(txt,f.name)}
+      else if(kind==='waste'){const a=parseWaste(txt);S.msg=a.length<5?'Need at least 5 daily rows: date, meals, kg (for example 2026-10-14,880,96.5).':addSingle('waste',f.name,a)}
+      else{const s=parseCSV(txt);
+        S.msg=s.length<48?'Found '+s.length+' hourly rows in '+f.name+'; at least 48 are needed. Use two columns, datetime and value (for example 2026-10-14 09:00,118.4), or a campus CSV that starts with kind,asset.':addSingle(kind,f.name,kind==='energy'?s:{s,ev:[]})}
+      el.value='';S.xp=null;analyze();render()})}
+  if(el.closest&&el.closest('#settings')){const k=el.dataset.k;S.cfg[k]=k==='campus'?el.value:Number(el.value);analyze();render()}});
+window.addEventListener('hashchange',route);
+
+const SET=[['campus','College name','text'],['tariff','Electricity ₹/kWh','number'],['wtariff','Water ₹/kL','number'],['ef','Grid CO₂ kg/kWh','number'],['pf','Power factor','number'],['contract','Contract demand kVA','number'],['food','Food cost ₹/kg','number'],['fans','Hostel fans (count)','number'],['tubes','Hostel tube lights (count)','number']];
+$('#settings').innerHTML=SET.map(s=>`<label>${s[1]}<input data-k="${s[0]}" type="${s[2]}" ${s[2]==='number'?'step="any"':''} value="${esc(S.cfg[s[0]])}"></label>`).join('');
+loadSample();analyze();route();
+</script>
+</body>
+</html>
